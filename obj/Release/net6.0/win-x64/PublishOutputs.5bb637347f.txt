@@ -1,0 +1,5 @@
+C:\Users\bochieng\Source\Repos\SMS_Service\bin\Release\net6.0\publish\win-x64\appsettings.Development.json
+C:\Users\bochieng\Source\Repos\SMS_Service\bin\Release\net6.0\publish\win-x64\appsettings.json
+C:\Users\bochieng\Source\Repos\SMS_Service\bin\Release\net6.0\publish\win-x64\Connected Services\NavWS\ConnectedService.json
+C:\Users\bochieng\Source\Repos\SMS_Service\bin\Release\net6.0\publish\win-x64\SMS_Service.pdb
+C:\Users\bochieng\Source\Repos\SMS_Service\bin\Release\net6.0\publish\win-x64\SMS_Service.exe
