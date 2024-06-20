@@ -12,6 +12,7 @@ namespace SMS_Service
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<Worker> _logger;
+        private readonly HttpClient _httpClient;
         public static string logpath;
         private static NetworkCredential cd = new NetworkCredential("mpesactob", "$MyProtect@2018#");
 
@@ -24,101 +25,102 @@ namespace SMS_Service
             return binding;
 
         }
+
         public static System.ServiceModel.EndpointAddress GetAddress()
         {
-            return new System.ServiceModel.EndpointAddress("http://192.168.1.21:1002/test/WS/kssl/Codeunit/MSACCO");
+              return new System.ServiceModel.EndpointAddress("http://192.168.1.109:8148/MobileBanking/WS/kssl/Codeunit/MSACCO");
+           // return new System.ServiceModel.EndpointAddress("http://192.168.1.21:1002/test/WS/kssl/Codeunit/MSACCO");
         }
 
-        public Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory)
+        public Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory, HttpClient httpClient)
         {
             _httpClientFactory = httpClientFactory;
             _logger = logger;
+            _httpClient = httpClient;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-                await Task.Delay(1000, stoppingToken);
+            
+                this.WriteLog(MethodBase.GetCurrentMethod().Name, "---------------- The SMS Service has started running at: {time}"+ DateTimeOffset.Now+"---------------------");
 
                 try
                 {
-                    var responses = new List<Sms>();
                     // Fetch data from Navision
                     MSACCO_PortClient service = new MSACCO_PortClient(GetBinding(), GetAddress());
                     service.ClientCredentials.Windows.ClientCredential = cd;
 
+                    var responses = new List<Sms>();
+                    var logResponses = new List<SmsLogs>();
+
                     var sms = service.GetSMSList(5);
-
+                    //var sms = "0|Success|2882125|254741112070|Test bulk sms - logs just ignore|InternetBanking;0|Success|2882126|254741112070|Test bulk sms|InternetBanking;";
                     var messages = sms.Split(';');
-
-
+                    
                     foreach (var message in messages)
                     {
                         if (string.IsNullOrWhiteSpace(message))
                             continue;
 
                         var fields = message.Split('|');
+                        this.WriteLog(MethodBase.GetCurrentMethod().Name, "SMS from Navision to the Provider: " + $"--- {("ClientID: "+int.Parse(fields[2]), "Phone Number: "+fields[3], "Message: "+fields[4])}");
+                                           
 
+                        //SMS details from Nav sent to the Provider
                         var smsResponse = new Sms
 
                         {
-                            PartnerID = "12345",
-                            Apikey = "6565b5a73b8221",
-                            Pass_Type = "plain",
-                            Clientsmsid = int.Parse(fields[2]),
-                            Mobile = fields[3],
-                            Message = fields[4],
-                            Shortcode = "Advanta"
+                            partnerID = "10735",
+                            apikey = "823b0508951c8f6cde821340c5fe64db",
+                            pass_type = "plain",
+                            clientsmsid = int.Parse(fields[2]),
+                            mobile = fields[3],
+                            message = fields[4],
+                            shortcode = "KIMISITU"
 
                         };
-
+                       
                         responses.Add(smsResponse);
-
                     }
 
-                    var ret = new SmsRequest
+                    var smsBody = new SmsRequest
                     {
-                        Count = 5,
-                        Smslist = responses
-
-                    };
-                    this.WriteLog(MethodBase.GetCurrentMethod().Name, "Data From Nav to Provider: "+$"-- {ret}");
-
-                    var client = _httpClientFactory.CreateClient();
+                        count = 5,
+                        smslist = responses
+                    };                 
+                                     
                     var url = "https://quicksms.advantasms.com/api/services/sendbulk/";
-                    var content = new StringContent(JsonConvert.SerializeObject(ret), Encoding.UTF8, "application/json");
+                    var content = new StringContent(JsonConvert.SerializeObject(smsBody), Encoding.UTF8, "application/json");
 
-                    var response = await client.PostAsync(url, content);
+                    var response = await _httpClient.PostAsync(url, content);
+
                     if (response.IsSuccessStatusCode)
-                    {
-                        this.WriteLog(MethodBase.GetCurrentMethod().Name, "Success: Data Sent To Provider");
-                        //  _logger.LogInformation("SMS data posted successfully.");
-                        Console.WriteLine("SMS data posted successfully");
+                    {                    
+                        this.WriteLog(MethodBase.GetCurrentMethod().Name, "Success: Response from the Provider" + $"--- {JsonConvert.SerializeObject(response.Content.ReadAsStringAsync().Result)}"); 
                     }
                     else
                     {
-                        this.WriteLog(MethodBase.GetCurrentMethod().Name, "Error: Data Not Sent To Provider");
-                        Console.WriteLine("Failed to post SMS data.");
-                        //_logger.LogError("Failed to post SMS data.");
+                        this.WriteLog(MethodBase.GetCurrentMethod().Name, "Error: SMS Not Sent to the Provider");
                     }
-
                 }
                 catch (Exception ex)
                 {
-                    this.WriteLog(MethodBase.GetCurrentMethod().Name, "Server Error: " + $"-- {ex.Message}");
-                    Console.WriteLine("Error fetching or sending data: " + ex.Message);
+                    this.WriteLog(MethodBase.GetCurrentMethod().Name, "Server Error: " + $"-- {ex.Message}");                 
                 }
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
-            /*      while (!stoppingToken.IsCancellationRequested)
-                  {
-                      _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-                      await Task.Delay(1000, stoppingToken);
-                  }*/
         }
 
+        public override async Task StopAsync(CancellationToken stoppingToken)
+        {
+            this.WriteLog(MethodBase.GetCurrentMethod().Name, "------------ The SMS service has started stopping at: {time}"+ DateTimeOffset.Now+"-------------");
+            await base.StopAsync(stoppingToken);
+        }
+
+
+        // Logging Functions
         public static void LogEntryOnFile(string clientRequest)
         {
             System.IO.File.AppendAllText(Worker.LogFileName, clientRequest + "\n");
